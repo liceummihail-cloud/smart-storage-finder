@@ -76,7 +76,15 @@ async function embed(text: string): Promise<number[]> {
       dimensions: 768,
     }),
   });
-  if (!res.ok) throw new Error(`Embedding error ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error("Забагато запитів до AI. Зачекай хвилинку і спробуй ще раз.");
+    }
+    if (res.status === 402) {
+      throw new Error("Закінчились AI-кредити робочого простору. Поповни їх у Settings → Workspace → Usage.");
+    }
+    throw new Error(`Помилка AI ембедінгу (${res.status})`);
+  }
   const json = await res.json();
   return json.data[0].embedding as number[];
 }
