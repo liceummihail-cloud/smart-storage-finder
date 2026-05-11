@@ -200,9 +200,9 @@ function ContainerDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-sm flex items-end" onClick={onClose}>
       <div
-        className="w-full max-w-md mx-auto bg-background rounded-t-[2rem] p-6 max-h-[85vh] overflow-y-auto neu-raised"
+        className="w-full max-w-md mx-auto bg-background rounded-t-[2rem] p-6 pb-28 max-h-[90vh] overflow-y-auto neu-raised"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-12 h-1.5 rounded-full bg-muted mx-auto mb-6" />
