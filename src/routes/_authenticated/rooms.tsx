@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, LogOut, ImagePlus, Lock } from "lucide-react";
+import { Plus, LogOut, ImagePlus, Lock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { NeuButton, NeuCard, NeuInput } from "@/components/neu";
 import { supabase } from "@/integrations/supabase/client";
