@@ -160,18 +160,27 @@ function Rooms() {
 
       <div className="space-y-3">
         {rooms.map((r) => (
-          <Link key={r.id} to="/rooms/$roomId" params={{ roomId: r.id }}>
-            <NeuCard className="!p-3 flex gap-3 items-center">
-              {r.photo_url ? (
-                <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
-              ) : (
-                <div className="w-16 h-16 rounded-2xl neu-pressed" />
-              )}
-              <div className="flex-1">
-                <div className="font-semibold">{r.name}</div>
-              </div>
-            </NeuCard>
-          </Link>
+          <div key={r.id} className="relative">
+            <Link to="/rooms/$roomId" params={{ roomId: r.id }}>
+              <NeuCard className="!p-3 flex gap-3 items-center pr-14">
+                {r.photo_url ? (
+                  <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl neu-pressed" />
+                )}
+                <div className="flex-1">
+                  <div className="font-semibold">{r.name}</div>
+                </div>
+              </NeuCard>
+            </Link>
+            <button
+              onClick={(e) => removeRoom(e, r)}
+              aria-label="Видалити кімнату"
+              className="neu-interactive absolute top-1/2 -translate-y-1/2 right-3 w-10 h-10 rounded-2xl flex items-center justify-center text-destructive"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         ))}
         {rooms.length === 0 && !creating && (
           <p className="text-center text-sm text-muted-foreground py-12">
