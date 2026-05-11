@@ -159,8 +159,12 @@ function ContainerDrawer({
     r.onresult = (e: any) => {
       let txt = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        txt += e.results[i][0].transcript;
-        if (e.results[i].isFinal) acc += e.results[i][0].transcript + " ";
+        const chunk = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          acc += chunk + " ";
+        } else {
+          txt += chunk;
+        }
       }
       setTranscript(acc + txt);
     };
