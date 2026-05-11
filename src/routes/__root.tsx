@@ -81,11 +81,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Сфотографуй кімнату, познач коробки, надиктуй вміст. ШІ допоможе знайти будь-яку річ за секунди." },
       { name: "author", content: "Storage Organiser" },
       { name: "theme-color", content: "#2a2738" },
-      { property: "og:title", content: "Storage Organiser" },
-      { property: "og:description", content: "Розумний органайзер твоїх речей — фото, голос, ШІ-пошук." },
+      { property: "og:title", content: "Storage Organiser — пам'ятай де що лежить" },
+      { property: "og:description", content: "Сфотографуй кімнату, познач коробки, надиктуй вміст. ШІ допоможе знайти будь-яку річ за секунди." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Storage Organiser — пам'ятай де що лежить" },
+      { name: "twitter:description", content: "Сфотографуй кімнату, познач коробки, надиктуй вміст. ШІ допоможе знайти будь-яку річ за секунди." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f65f0321-201b-4f77-9961-595cc34d86c4/id-preview-ca747304--a0ca9953-2f92-4086-8bcd-25d6a807b1bb.lovable.app-1778493657103.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f65f0321-201b-4f77-9961-595cc34d86c4/id-preview-ca747304--a0ca9953-2f92-4086-8bcd-25d6a807b1bb.lovable.app-1778493657103.png" },
     ],
     links: [
       {
