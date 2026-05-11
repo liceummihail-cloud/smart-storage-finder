@@ -1,51 +1,52 @@
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { supabase } from "./client";
 
 let installed = false;
 
 /**
- * Monkey-patches window.fetch on the client so that requests to TanStack
- * server functions (`/_serverFn/...`) automatically carry the current
- * Supabase access token in the Authorization header. This lets server
- * functions guarded by `requireSupabaseAuth` work without manually wiring
- * headers at every call site.
+ * Adds the current Supabase access token as an `Authorization: Bearer ...`
+ * header to every `/_serverFn/...` request. No-op on the server.
  */
-export function installServerFnAuth() {
-  if (installed || typeof window === "undefined") return;
-  installed = true;
+export const installServerFnAuth = createIsomorphicFn()
+  .server(() => {})
+  .client(() => {
+    if (installed) return;
+    installed = true;
 
-  let token: string | null = null;
+    let token: string | null = null;
 
-  supabase.auth.getSession().then(({ data }) => {
-    token = data.session?.access_token ?? null;
-  });
-  supabase.auth.onAuthStateChange((_evt, session) => {
-    token = session?.access_token ?? null;
-  });
+    supabase.auth.getSession().then(({ data }) => {
+      token = data.session?.access_token ?? null;
+    });
+    supabase.auth.onAuthStateChange((_evt, session) => {
+      token = session?.access_token ?? null;
+    });
 
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = async (input, init) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
 
-    if (url.includes("/_serverFn/")) {
-      // Refresh token if missing (e.g. very first call right after login)
-      if (!token) {
-        const { data } = await supabase.auth.getSession();
-        token = data.session?.access_token ?? null;
-      }
-      if (token) {
-        const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
-        if (!headers.has("authorization")) {
-          headers.set("authorization", `Bearer ${token}`);
+      if (url.includes("/_serverFn/")) {
+        if (!token) {
+          const { data } = await supabase.auth.getSession();
+          token = data.session?.access_token ?? null;
         }
-        return originalFetch(input, { ...init, headers });
+        if (token) {
+          const headers = new Headers(
+            init?.headers ?? (input instanceof Request ? input.headers : undefined),
+          );
+          if (!headers.has("authorization")) {
+            headers.set("authorization", `Bearer ${token}`);
+          }
+          return originalFetch(input, { ...init, headers });
+        }
       }
-    }
 
-    return originalFetch(input, init);
-  };
-}
+      return originalFetch(input, init);
+    };
+  });
