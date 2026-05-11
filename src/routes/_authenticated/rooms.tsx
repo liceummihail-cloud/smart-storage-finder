@@ -77,7 +77,7 @@ function Rooms() {
       setFile(null);
       setCreating(false);
       await load();
-      navigate({ to: "/rooms_/$roomId", params: { roomId: created.id } });
+      navigate({ to: "/rooms/$roomId", params: { roomId: created.id } });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -137,7 +137,7 @@ function Rooms() {
 
       <div className="space-y-3">
         {rooms.map((r) => (
-          <Link key={r.id} to="/rooms_/$roomId" params={{ roomId: r.id }}>
+          <Link key={r.id} to="/rooms/$roomId" params={{ roomId: r.id }}>
             <NeuCard className="!p-3 flex gap-3 items-center">
               {r.photo_url ? (
                 <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
