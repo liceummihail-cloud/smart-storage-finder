@@ -85,6 +85,29 @@ function Rooms() {
     }
   };
 
+  const removeRoom = async (e: React.MouseEvent, room: Room) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Видалити кімнату «${room.name}» з усіма коробками та речами?`)) return;
+    try {
+      const { data: containers } = await supabase
+        .from("containers")
+        .select("id")
+        .eq("room_id", room.id);
+      const containerIds = (containers ?? []).map((c) => c.id);
+      if (containerIds.length > 0) {
+        await supabase.from("items").delete().in("container_id", containerIds);
+        await supabase.from("containers").delete().eq("room_id", room.id);
+      }
+      const { error } = await supabase.from("rooms").delete().eq("id", room.id);
+      if (error) throw error;
+      toast.success("Кімнату видалено");
+      await load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   return (
     <main className="px-6 py-8 mx-auto max-w-md">
       <header className="flex justify-between items-center mb-8">
