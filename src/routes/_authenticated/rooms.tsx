@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, LogOut, ImagePlus } from "lucide-react";
+import { Plus, LogOut, ImagePlus, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { NeuButton, NeuCard, NeuInput } from "@/components/neu";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,10 +10,13 @@ export const Route = createFileRoute("/_authenticated/rooms")({
   component: Rooms,
 });
 
+const FREE_ROOMS_LIMIT = 3;
 type Room = { id: string; name: string; photo_url: string | null };
+type Plan = "free" | "pro";
 
 function Rooms() {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [plan, setPlan] = useState<Plan>("free");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -21,20 +24,30 @@ function Rooms() {
   const navigate = useNavigate();
 
   const load = async () => {
-    const { data } = await supabase
-      .from("rooms")
-      .select("id,name,photo_url")
-      .order("created_at", { ascending: false });
-    setRooms(data ?? []);
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const [{ data: rs }, { data: prof }] = await Promise.all([
+      supabase.from("rooms").select("id,name,photo_url").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("plan").eq("user_id", u.user.id).maybeSingle(),
+    ]);
+    setRooms(rs ?? []);
+    setPlan((prof?.plan as Plan) ?? "free");
   };
 
   useEffect(() => {
     load();
   }, []);
 
+  const atLimit = plan === "free" && rooms.length >= FREE_ROOMS_LIMIT;
+
   const create = async () => {
     if (!name.trim() || !file) {
       toast.error("Додай назву та фото");
+      return;
+    }
+    if (atLimit) {
+      toast.error("Досягнуто ліміт 3 кімнат на Freemium");
+      navigate({ to: "/upgrade" });
       return;
     }
     setBusy(true);
@@ -52,12 +65,19 @@ function Rooms() {
         .insert({ user_id: u.user.id, name: name.trim(), photo_url: signed?.signedUrl ?? null })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("FREE_PLAN_ROOMS_LIMIT")) {
+          toast.error("Ліміт 3 кімнат на Freemium. Перейди на Pro.");
+          navigate({ to: "/upgrade" });
+          return;
+        }
+        throw error;
+      }
       setName("");
       setFile(null);
       setCreating(false);
       await load();
-      navigate({ to: "/rooms/$roomId", params: { roomId: created.id } });
+      navigate({ to: "/rooms_/$roomId", params: { roomId: created.id } });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -70,7 +90,10 @@ function Rooms() {
       <header className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold">Мої кімнати</h1>
-          <p className="text-xs text-muted-foreground mt-1">{rooms.length} приміщень</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {rooms.length}
+            {plan === "free" ? ` / ${FREE_ROOMS_LIMIT} (Freemium)` : " приміщень"}
+          </p>
         </div>
         <button onClick={signOut} className="neu-interactive w-11 h-11 rounded-2xl flex items-center justify-center">
           <LogOut className="w-4 h-4" />
@@ -98,6 +121,14 @@ function Rooms() {
             </NeuButton>
           </div>
         </NeuCard>
+      ) : atLimit ? (
+        <NeuCard className="mb-6 text-center space-y-3">
+          <Lock className="w-6 h-6 mx-auto text-primary" />
+          <p className="text-sm">Ти використав усі 3 кімнати Freemium</p>
+          <Link to="/upgrade">
+            <NeuButton variant="primary" className="w-full">Перейти на Pro</NeuButton>
+          </Link>
+        </NeuCard>
       ) : (
         <NeuButton variant="primary" className="w-full mb-6" onClick={() => setCreating(true)}>
           <Plus className="w-4 h-4" /> Нова кімната
@@ -106,7 +137,7 @@ function Rooms() {
 
       <div className="space-y-3">
         {rooms.map((r) => (
-          <Link key={r.id} to="/rooms/$roomId" params={{ roomId: r.id }}>
+          <Link key={r.id} to="/rooms_/$roomId" params={{ roomId: r.id }}>
             <NeuCard className="!p-3 flex gap-3 items-center">
               {r.photo_url ? (
                 <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
