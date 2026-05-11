@@ -8,6 +8,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 
+import { Toaster } from "sonner";
+
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -72,11 +74,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Storage Organiser — пам'ятай де що лежить" },
+      { name: "description", content: "Сфотографуй кімнату, познач коробки, надиктуй вміст. ШІ допоможе знайти будь-яку річ за секунди." },
+      { name: "author", content: "Storage Organiser" },
+      { name: "theme-color", content: "#2a2738" },
+      { property: "og:title", content: "Storage Organiser" },
+      { property: "og:description", content: "Розумний органайзер твоїх речей — фото, голос, ШІ-пошук." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
@@ -96,7 +99,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="uk" className="dark">
       <head>
         <HeadContent />
       </head>
@@ -114,6 +117,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
+      <Toaster richColors theme="dark" position="top-center" />
     </QueryClientProvider>
   );
 }
