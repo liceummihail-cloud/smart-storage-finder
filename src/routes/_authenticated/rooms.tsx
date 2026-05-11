@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, LogOut, ImagePlus, Lock } from "lucide-react";
+import { Plus, LogOut, ImagePlus, Lock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { NeuButton, NeuCard, NeuInput } from "@/components/neu";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,6 +85,29 @@ function Rooms() {
     }
   };
 
+  const removeRoom = async (e: React.MouseEvent, room: Room) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Видалити кімнату «${room.name}» з усіма коробками та речами?`)) return;
+    try {
+      const { data: containers } = await supabase
+        .from("containers")
+        .select("id")
+        .eq("room_id", room.id);
+      const containerIds = (containers ?? []).map((c) => c.id);
+      if (containerIds.length > 0) {
+        await supabase.from("items").delete().in("container_id", containerIds);
+        await supabase.from("containers").delete().eq("room_id", room.id);
+      }
+      const { error } = await supabase.from("rooms").delete().eq("id", room.id);
+      if (error) throw error;
+      toast.success("Кімнату видалено");
+      await load();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   return (
     <main className="px-6 py-8 mx-auto max-w-md">
       <header className="flex justify-between items-center mb-8">
@@ -137,18 +160,27 @@ function Rooms() {
 
       <div className="space-y-3">
         {rooms.map((r) => (
-          <Link key={r.id} to="/rooms/$roomId" params={{ roomId: r.id }}>
-            <NeuCard className="!p-3 flex gap-3 items-center">
-              {r.photo_url ? (
-                <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
-              ) : (
-                <div className="w-16 h-16 rounded-2xl neu-pressed" />
-              )}
-              <div className="flex-1">
-                <div className="font-semibold">{r.name}</div>
-              </div>
-            </NeuCard>
-          </Link>
+          <div key={r.id} className="relative">
+            <Link to="/rooms/$roomId" params={{ roomId: r.id }}>
+              <NeuCard className="!p-3 flex gap-3 items-center pr-14">
+                {r.photo_url ? (
+                  <img src={r.photo_url} alt={r.name} className="w-16 h-16 rounded-2xl object-cover neu-pressed" />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl neu-pressed" />
+                )}
+                <div className="flex-1">
+                  <div className="font-semibold">{r.name}</div>
+                </div>
+              </NeuCard>
+            </Link>
+            <button
+              onClick={(e) => removeRoom(e, r)}
+              aria-label="Видалити кімнату"
+              className="neu-interactive absolute top-1/2 -translate-y-1/2 right-3 w-10 h-10 rounded-2xl flex items-center justify-center text-destructive"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         ))}
         {rooms.length === 0 && !creating && (
           <p className="text-center text-sm text-muted-foreground py-12">
