@@ -175,11 +175,11 @@ export const saveItems = createServerFn({ method: "POST" })
         container_id: data.containerId,
         user_id: userId,
         name,
-        embedding: await embed(name),
+        embedding: JSON.stringify(await embed(name)),
       })),
     );
 
-    const { error } = await supabase.from("items").insert(rows);
+    const { error } = await supabase.from("items").insert(rows as any);
     if (error) throw new Error(error.message);
     return { ok: true, count: rows.length };
   });
