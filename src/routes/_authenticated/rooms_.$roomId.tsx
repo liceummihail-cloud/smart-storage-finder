@@ -7,7 +7,7 @@ import { NeuButton, NeuCard, NeuInput } from "@/components/neu";
 import { supabase } from "@/integrations/supabase/client";
 import { extractItems, saveItems } from "@/lib/ai.functions";
 
-export const Route = createFileRoute("/_authenticated/rooms/$roomId")({
+export const Route = createFileRoute("/_authenticated/rooms_/$roomId")({
   component: RoomDetail,
 });
 
