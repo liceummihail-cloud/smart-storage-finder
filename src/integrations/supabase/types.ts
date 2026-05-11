@@ -14,16 +14,177 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      containers: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          room_id: string
+          user_id: string
+          x: number
+          y: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          room_id: string
+          user_id: string
+          x: number
+          y: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          room_id?: string
+          user_id?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "containers_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      items: {
+        Row: {
+          container_id: string
+          created_at: string
+          embedding: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          container_id: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          container_id?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "items_container_id_fkey"
+            columns: ["container_id"]
+            isOneToOne: false
+            referencedRelation: "containers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          tutorial_completed: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          tutorial_completed?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          tutorial_completed?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rooms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          photo_url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          photo_url?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          photo_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage_counters: {
+        Row: {
+          id: string
+          month: string
+          searches_count: number
+          transcriptions_count: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          month: string
+          searches_count?: number
+          transcriptions_count?: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          month?: string
+          searches_count?: number
+          transcriptions_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_items: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          container_id: string
+          container_label: string
+          id: string
+          name: string
+          room_id: string
+          room_name: string
+          similarity: number
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      subscription_plan: "free" | "pro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +311,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      subscription_plan: ["free", "pro"],
+    },
   },
 } as const
