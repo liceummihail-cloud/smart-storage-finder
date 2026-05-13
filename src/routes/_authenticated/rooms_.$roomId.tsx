@@ -155,18 +155,21 @@ function ContainerDrawer({
     r.lang = "uk-UA";
     r.interimResults = true;
     r.continuous = true;
-    let acc = "";
+    // Зберігаємо фінальні фрагменти за індексом, щоб уникнути дублів
+    // (Android Chrome може повторно емітити той самий resultIndex)
+    const finals = new Map<number, string>();
     r.onresult = (e: any) => {
-      let txt = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      let interim = "";
+      for (let i = 0; i < e.results.length; i++) {
         const chunk = e.results[i][0].transcript;
         if (e.results[i].isFinal) {
-          acc += chunk + " ";
-        } else {
-          txt += chunk;
+          finals.set(i, chunk.trim());
+        } else if (i >= e.resultIndex) {
+          interim += chunk;
         }
       }
-      setTranscript(acc + txt);
+      const finalText = Array.from(finals.values()).filter(Boolean).join(" ");
+      setTranscript((finalText + " " + interim).replace(/\s+/g, " ").trim());
     };
     r.onend = () => setRecording(false);
     r.onerror = () => setRecording(false);
