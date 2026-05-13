@@ -21,6 +21,7 @@ export type Database = {
           label: string
           room_id: string
           user_id: string
+          wall_id: string | null
           x: number
           y: number
         }
@@ -30,6 +31,7 @@ export type Database = {
           label: string
           room_id: string
           user_id: string
+          wall_id?: string | null
           x: number
           y: number
         }
@@ -39,6 +41,7 @@ export type Database = {
           label?: string
           room_id?: string
           user_id?: string
+          wall_id?: string | null
           x?: number
           y?: number
         }
@@ -48,6 +51,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "containers_wall_id_fkey"
+            columns: ["wall_id"]
+            isOneToOne: false
+            referencedRelation: "walls"
             referencedColumns: ["id"]
           },
         ]
@@ -165,6 +175,65 @@ export type Database = {
         }
         Relationships: []
       }
+      user_security: {
+        Row: {
+          biometric_enabled: boolean
+          created_at: string
+          pin_hash: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          biometric_enabled?: boolean
+          created_at?: string
+          pin_hash?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          biometric_enabled?: boolean
+          created_at?: string
+          pin_hash?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      walls: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walls_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -184,7 +253,7 @@ export type Database = {
       }
     }
     Enums: {
-      subscription_plan: "free" | "pro"
+      subscription_plan: "free" | "pro" | "premium"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -312,7 +381,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      subscription_plan: ["free", "pro"],
+      subscription_plan: ["free", "pro", "premium"],
     },
   },
 } as const
