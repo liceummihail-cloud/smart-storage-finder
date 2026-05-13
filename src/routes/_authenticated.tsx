@@ -3,12 +3,12 @@ import { Boxes, Search, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     if (typeof window === "undefined") return;
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect({ to: "/login", search: { mode: "signin" } });
 
-    // Check tutorial flag
+    // Check tutorial flag (persisted in DB — only new users see onboarding)
     const { data: profile } = await supabase
       .from("profiles")
       .select("tutorial_completed")
