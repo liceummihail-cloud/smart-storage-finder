@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Mic, MicOff, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Mic, MicOff, Trash2, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { NeuButton, NeuCard, NeuInput } from "@/components/neu";
 import { supabase } from "@/integrations/supabase/client";
