@@ -309,8 +309,19 @@ function ContainerDrawer({
             <h3 className="text-xs uppercase text-muted-foreground mb-2 px-1">У коробці</h3>
             <div className="flex flex-wrap gap-2">
               {items.map((i) => (
-                <span key={i.id} className="neu-pressed px-3 py-1.5 rounded-2xl text-sm">
+                <span key={i.id} className="neu-pressed pl-3 pr-1 py-1 rounded-2xl text-sm flex items-center gap-1">
                   {i.name}
+                  <button
+                    onClick={async () => {
+                      const { error } = await supabase.from("items").delete().eq("id", i.id);
+                      if (error) toast.error(error.message);
+                      else onChanged();
+                    }}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive"
+                    title="Видалити"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </span>
               ))}
             </div>
