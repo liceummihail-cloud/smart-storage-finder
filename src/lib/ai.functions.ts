@@ -11,10 +11,63 @@ const FREE_LIMITS = {
   searches: 200,
 };
 
+// Monthly AI usage caps per plan. Premium = no monthly cap (still rate-limited).
+const PLAN_LIMITS: Record<string, { transcriptions: number; searches: number }> = {
+  free: { transcriptions: 100, searches: 200 },
+  pro: { transcriptions: 5000, searches: 20000 },
+  premium: { transcriptions: Number.POSITIVE_INFINITY, searches: Number.POSITIVE_INFINITY },
+};
+
+// Per-minute soft rate limit (anti-abuse). Same for all plans.
+const RATE_LIMIT_PER_MIN = 60;
+
+// AI prices (USD per 1M tokens) — keep in sync with Lovable AI Gateway pricing.
+const PRICES = {
+  "google/gemini-2.5-flash": { input: 0.30, output: 2.50 },
+  "google/gemini-embedding-001": { input: 0.15, output: 0 },
+} as const;
+
 class LimitError extends Error {
   status = 402;
   constructor(msg: string) {
     super(msg);
+  }
+}
+
+async function checkRateLimit(supabase: any, userId: string) {
+  const { data, error } = await supabase.rpc("increment_ai_rate_limit", { _user_id: userId });
+  if (error) throw new Error(error.message);
+  if ((data as number) > RATE_LIMIT_PER_MIN) {
+    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`);
+  }
+}
+
+function costFor(model: keyof typeof PRICES, inputTokens: number, outputTokens: number) {
+  const p = PRICES[model];
+  if (!p) return 0;
+  return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
+}
+
+async function logUsage(
+  supabase: any,
+  userId: string,
+  operation: string,
+  model: keyof typeof PRICES,
+  inputTokens: number,
+  outputTokens: number,
+) {
+  try {
+    await supabase.rpc("log_ai_usage", {
+      _user_id: userId,
+      _operation: operation,
+      _model: model,
+      _input_tokens: inputTokens,
+      _output_tokens: outputTokens,
+      _cost_usd: costFor(model, inputTokens, outputTokens),
+    });
+  } catch (e) {
+    // Logging must never break the user flow.
+    console.error("logUsage failed", e);
   }
 }
 
@@ -61,7 +114,7 @@ async function callAI(body: unknown) {
   return res.json();
 }
 
-async function embed(text: string): Promise<number[]> {
+async function embed(text: string): Promise<{ embedding: number[]; tokens: number }> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY is not configured");
   const res = await fetch(`${GATEWAY}/embeddings`, {
@@ -86,7 +139,7 @@ async function embed(text: string): Promise<number[]> {
     throw new Error(`Помилка AI ембедінгу (${res.status})`);
   }
   const json = await res.json();
-  return json.data[0].embedding as number[];
+  return { embedding: json.data[0].embedding as number[], tokens: json.usage?.total_tokens ?? 0 };
 }
 
 /** Cleans raw speech transcript and extracts a list of items. */
@@ -96,16 +149,21 @@ export const extractItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Check Pro vs Free + monthly limit
+    // Per-minute rate limit (anti-abuse, all plans)
+    await checkRateLimit(supabase, userId);
+
+    // Plan-based monthly cap
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
       .eq("user_id", userId)
       .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
     const counter = await getOrCreateMonthly(supabase, userId);
-    if (profile?.plan === "free" && counter.transcriptions_count >= FREE_LIMITS.transcriptions) {
+    if (counter.transcriptions_count >= limits.transcriptions) {
       throw new LimitError(
-        `Місячний ліміт безкоштовного плану (${FREE_LIMITS.transcriptions} транскрипцій) вичерпано.`,
+        `Місячний ліміт плану ${planKey} (${limits.transcriptions} транскрипцій) вичерпано.`,
       );
     }
 
@@ -151,6 +209,15 @@ export const extractItems = createServerFn({ method: "POST" })
     }
     items = items.map((s) => s.trim()).filter(Boolean);
 
+    await logUsage(
+      supabase,
+      userId,
+      "extract_items",
+      "google/gemini-2.5-flash",
+      ai.usage?.prompt_tokens ?? 0,
+      ai.usage?.completion_tokens ?? 0,
+    );
+
     await supabase
       .from("usage_counters")
       .update({ transcriptions_count: counter.transcriptions_count + 1 })
@@ -174,21 +241,31 @@ export const saveItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
+    await checkRateLimit(supabase, userId);
+
     if (data.replace) {
       await supabase.from("items").delete().eq("container_id", data.containerId);
     }
 
+    let totalEmbedTokens = 0;
     const rows = await Promise.all(
-      data.items.map(async (name) => ({
-        container_id: data.containerId,
-        user_id: userId,
-        name,
-        embedding: JSON.stringify(await embed(name)),
-      })),
+      data.items.map(async (name) => {
+        const e = await embed(name);
+        totalEmbedTokens += e.tokens;
+        return {
+          container_id: data.containerId,
+          user_id: userId,
+          name,
+          embedding: JSON.stringify(e.embedding),
+        };
+      }),
     );
 
     const { error } = await supabase.from("items").insert(rows as any);
     if (error) throw new Error(error.message);
+
+    await logUsage(supabase, userId, "embed_save", "google/gemini-embedding-001", totalEmbedTokens, 0);
+
     return { ok: true, count: rows.length };
   });
 
@@ -199,24 +276,30 @@ export const searchItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
+    await checkRateLimit(supabase, userId);
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
       .eq("user_id", userId)
       .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
     const counter = await getOrCreateMonthly(supabase, userId);
-    if (profile?.plan === "free" && counter.searches_count >= FREE_LIMITS.searches) {
+    if (counter.searches_count >= limits.searches) {
       throw new LimitError(
-        `Місячний ліміт безкоштовного плану (${FREE_LIMITS.searches} пошуків) вичерпано.`,
+        `Місячний ліміт плану ${planKey} (${limits.searches} пошуків) вичерпано.`,
       );
     }
 
-    const queryEmbedding = await embed(data.query);
+    const e = await embed(data.query);
     const { data: matches, error } = await supabase.rpc("match_items", {
-      query_embedding: queryEmbedding as any,
+      query_embedding: e.embedding as any,
       match_count: 12,
     });
     if (error) throw new Error(error.message);
+
+    await logUsage(supabase, userId, "embed_search", "google/gemini-embedding-001", e.tokens, 0);
 
     await supabase
       .from("usage_counters")

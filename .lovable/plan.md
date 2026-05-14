@@ -1,67 +1,88 @@
 ## Мета
-Підготувати додаток до публікації в Play Market через Capacitor, з мінімальною прив'язкою до Lovable, та реалізувати залишкові функціональні запити (виправлення диктування, PIN/біометрія, туторіал, стіни в кімнаті, підписки).
 
-## 1. Виправлення дублювання при диктуванні (Android)
-Проблема в інтерфейсі браузера на телефоні: Web Speech API повертає проміжні (`interim`) результати, які додаються до тексту замість заміни. У вебпрегляді Lovable не відтворюється, бо використовується інший рушій розпізнавання.
+Захистити проєкт від користувачів-зловмисників, які можуть з'їсти весь AI-бюджет. Зараз Pro = "необмежено" в коді — це ризик. Додаємо 3 рівні захисту без погіршення UX для нормальних користувачів.
 
-Рішення:
-- Розділити стан на `finalText` і `interimText`.
-- В `onresult` перебирати всі `results`, накопичувати тільки ті, що `isFinal`, а проміжні зберігати окремо.
-- Показувати конкатенацію `finalText + interimText` лише для відображення; у БД писати тільки `finalText`.
-- Після `Capacitor` — переключитись на `@capacitor-community/speech-recognition` (нативне), яке працює стабільніше і офлайн.
+Важливо: користуємось вбудованими можливостями Lovable. Жорсткого rate-limiting на рівні інфраструктури зараз немає — робимо програмний на рівні БД (підрахунок запитів за хвилину).
 
-## 2. PIN-код + біометрія
-- Окрема таблиця `user_security` (user_id, pin_hash, biometric_enabled, created_at).
-- При першому вході після email/пароля — пропозиція встановити PIN (4–6 цифр).
-- На наступних відкриттях додатка — екран `/lock` з PIN-падом + кнопкою "Face ID / Відбиток".
-- Хеш PIN через `bcrypt` на сервері (server function `setPin`, `verifyPin`).
-- Біометрія — плагін `@capacitor-community/biometric-auth` (працює тільки в нативній збірці; у браузері — тільки PIN).
-- Сесія Supabase лишається, lock-screen — додатковий шар, флаг у `localStorage` "розблоковано до закриття додатка".
+---
 
-## 3. Персистентність туторіалу
-- Колонка `onboarded_at timestamptz` у `profiles` (вже може бути; перевірю).
-- Touториал показується, коли `profiles.onboarded_at IS NULL`.
-- Кнопка "пройти знову" — у налаштуваннях, скидає поле.
-- Прибрати поточну логіку, що скидає прапорець при кожному вході.
+## 1. Ліміти для Pro (hard cap)
 
-## 4. Стіни в кімнаті
-- Нова таблиця `walls` (id, room_id, name, position, created_at) з FK на `rooms` і RLS по власнику кімнати.
-- У `containers` додати nullable `wall_id` (FK → walls). Якщо NULL — коробка належить кімнаті напряму (для зворотної сумісності).
-- UI кімнати: вкладки/секції "Без стіни" + динамічно стіни. Кнопка "+ Стіна" (макс. 4–10).
-- Drag-and-drop коробки між стінами (опційно, можна пізніше).
+Розширити `FREE_LIMITS` у `src/lib/ai.functions.ts` на структуру з лімітами на план:
 
-## 5. Підписки (3 тарифи)
-- Таблиця `subscriptions` (user_id, tier `free`|`pro`|`premium`, started_at, expires_at, source `stripe`|`google_play`).
-- Ліміти (server-side в `createServerFn`):
-  - **Free**: 1 кімната, без стін, 50 предметів.
-  - **Pro**: 10 кімнат, стіни, 1000 предметів, AI-пошук без обмежень.
-  - **Premium**: безлім, експорт, шерінг кімнат з родиною.
-- Сторінка `/upgrade` (вже є) — оновити з 3 планами.
-- Платежі: спочатку Stripe (web), пізніше Google Play Billing через `@capacitor-community/in-app-purchases` для нативної збірки. Прийняти як двоетапний.
+```text
+free:    100 транскрипцій / 200 пошуків на місяць
+pro:    5000 транскрипцій / 20000 пошуків на місяць
+premium: без ліміту (або 50000/200000 для перестраховки)
+```
 
-## 6. Capacitor — пакування під Android
-- `bun add @capacitor/core @capacitor/cli @capacitor/android`.
-- `npx cap init` з `appId: app.lovable.storage` (або власний reverse-DNS), `appName`.
-- `capacitor.config.ts` з `webDir: 'dist'`, `server.androidScheme: 'https'`.
-- Білд: `bun run build` → `npx cap add android` → `npx cap sync` → відкриття в Android Studio для AAB.
-- Інструкція в `README-ANDROID.md` з кроками для локального білду.
-- Плагіни: speech-recognition, biometric-auth, in-app-purchases, preferences (для PIN-стану).
+У `extractItems` і `searchItems` прибрати спеціальну гілку "тільки free" — перевіряти ліміт для всіх планів за `LIMITS[plan]`. Premium — пропускати перевірку.
 
-## 7. Незалежність від Lovable (підготовка)
-- Усі змінні env читаються з `.env` (вже так). При експорті з GitHub — `.env.example` з інструкцією.
-- Документація в `MIGRATION.md`: як перенести Supabase на власний акаунт (SQL дамп + редагування `.env`), як замінити Lovable AI на власний ключ OpenAI/Gemini у `src/lib/ai.functions.ts`.
-- На цьому етапі залишаємо Lovable Cloud активним — міграція тільки інструкція.
+Користувач Pro в нормі робить ~50 транскрипцій/міс — у нього 100x запас. Бот вдариться об стіну.
 
-## Послідовність реалізації
-Пропоную розбити на окремі повідомлення (щоб ти бачив результат поетапно):
+## 2. М'який rate limit (60 запитів/хв на user)
 
-1. **Спочатку**: виправлення диктування + персистентність туторіалу (швидко, без БД).
-2. **Далі**: міграція БД (стіни, user_security, subscriptions) + UI стін.
-3. **Потім**: PIN-код + 3 тарифи + ліміти.
-4. **Окремо**: Capacitor setup + інструкції для Android Studio + плагіни біометрії та speech-recognition.
-5. **В кінці**: документація `MIGRATION.md` + `README-ANDROID.md`.
+Нова таблиця `ai_rate_limit`:
+- `user_id uuid`
+- `window_start timestamptz` (округлено до хвилини)
+- `count int`
+- PK (`user_id`, `window_start`)
 
-## Питання перед стартом
-- App ID для Play Market — `app.lovable.storage` чи власний (типу `com.твійдомен.storage`)?
-- Stripe для веб-платежів зараз підключаємо чи поки тільки структура БД + сторінка планів без оплати?
-- Максимум стін на кімнату — 4 (як у прикладі) чи без обмежень для Pro/Premium?
+Перед кожним викликом AI робимо `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count`. Якщо count > 60 — кидаємо `LimitError("Забагато запитів. Зачекай хвилину.")`.
+
+Старі рядки видаляє pg-функція раз на день (cron не потрібен — просто запит з LIMIT при кожному 100-му виклику).
+
+## 3. Лог AI-витрат
+
+Нова таблиця `ai_usage_log`:
+- `user_id uuid`
+- `created_at timestamptz default now()`
+- `operation text` ('extract_items' | 'embed_save' | 'embed_search')
+- `model text`
+- `input_tokens int`
+- `output_tokens int`
+- `cost_usd numeric(10,6)` (рахуємо в коді за відомим прайсом)
+
+Записуємо після кожного успішного виклику AI. Це дає:
+- Топ-10 споживачів (`SELECT user_id, sum(cost_usd) FROM ai_usage_log WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 10`)
+- Загальну собівартість на користувача
+- Базу для майбутньої адмінки
+
+RLS: користувач бачить тільки свої записи; service_role бачить усе.
+
+## 4. Оновити сторінку Upgrade
+
+У `src/routes/_authenticated/upgrade.tsx` чесно показати ліміти Pro:
+- "До 5000 голосових / міс"
+- "До 20000 пошуків / міс"
+
+Замість поточного "Необмежено голосу і пошуків" — щоб користувач не очікував безмежності.
+
+## Технічні деталі
+
+**Файли, які зміняться:**
+- `src/lib/ai.functions.ts` — нова мапа лімітів, `checkRateLimit()`, `logUsage()`, нові виклики у трьох місцях.
+- `src/routes/_authenticated/upgrade.tsx` — оновлений текст features для Pro.
+- Міграція: 2 нові таблиці (`ai_rate_limit`, `ai_usage_log`) + RLS.
+
+**Підрахунок токенів:**
+- Для chat completions беремо з `ai.usage.prompt_tokens` / `completion_tokens` що повертає gateway.
+- Для embeddings — з `json.usage.total_tokens`.
+
+**Прайс (хардкод у коді):**
+```text
+gemini-2.5-flash:    input  $0.30/M, output $2.50/M
+gemini-embedding-001:           $0.15/M
+```
+
+**Що НЕ робимо у цій ітерації:**
+- Не блокуємо доступ при перевитраті кредитів Lovable (це окрема задача).
+- Не робимо UI адмінки (запит у БД достатньо для ручного моніторингу).
+- Не алертимо в email/Telegram — додамо пізніше за потреби.
+
+## Послідовність виконання
+
+1. Міграція БД (2 таблиці + RLS).
+2. Оновити `src/lib/ai.functions.ts`: ліміти, rate limit, лог.
+3. Оновити `src/routes/_authenticated/upgrade.tsx`: чесні цифри Pro.
+4. Перевірити що Free-користувач все ще впирається у свої 100/200, Pro — у 5000/20000.
