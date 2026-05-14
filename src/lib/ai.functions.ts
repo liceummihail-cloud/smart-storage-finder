@@ -149,16 +149,21 @@ export const extractItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Check Pro vs Free + monthly limit
+    // Per-minute rate limit (anti-abuse, all plans)
+    await checkRateLimit(supabase, userId);
+
+    // Plan-based monthly cap
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
       .eq("user_id", userId)
       .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
     const counter = await getOrCreateMonthly(supabase, userId);
-    if (profile?.plan === "free" && counter.transcriptions_count >= FREE_LIMITS.transcriptions) {
+    if (counter.transcriptions_count >= limits.transcriptions) {
       throw new LimitError(
-        `Місячний ліміт безкоштовного плану (${FREE_LIMITS.transcriptions} транскрипцій) вичерпано.`,
+        `Місячний ліміт плану ${planKey} (${limits.transcriptions} транскрипцій) вичерпано.`,
       );
     }
 
@@ -203,6 +208,15 @@ export const extractItems = createServerFn({ method: "POST" })
       items = [];
     }
     items = items.map((s) => s.trim()).filter(Boolean);
+
+    await logUsage(
+      supabase,
+      userId,
+      "extract_items",
+      "google/gemini-2.5-flash",
+      ai.usage?.prompt_tokens ?? 0,
+      ai.usage?.completion_tokens ?? 0,
+    );
 
     await supabase
       .from("usage_counters")
