@@ -11,10 +11,63 @@ const FREE_LIMITS = {
   searches: 200,
 };
 
+// Monthly AI usage caps per plan. Premium = no monthly cap (still rate-limited).
+const PLAN_LIMITS: Record<string, { transcriptions: number; searches: number }> = {
+  free: { transcriptions: 100, searches: 200 },
+  pro: { transcriptions: 5000, searches: 20000 },
+  premium: { transcriptions: Number.POSITIVE_INFINITY, searches: Number.POSITIVE_INFINITY },
+};
+
+// Per-minute soft rate limit (anti-abuse). Same for all plans.
+const RATE_LIMIT_PER_MIN = 60;
+
+// AI prices (USD per 1M tokens) — keep in sync with Lovable AI Gateway pricing.
+const PRICES = {
+  "google/gemini-2.5-flash": { input: 0.30, output: 2.50 },
+  "google/gemini-embedding-001": { input: 0.15, output: 0 },
+} as const;
+
 class LimitError extends Error {
   status = 402;
   constructor(msg: string) {
     super(msg);
+  }
+}
+
+async function checkRateLimit(supabase: any, userId: string) {
+  const { data, error } = await supabase.rpc("increment_ai_rate_limit", { _user_id: userId });
+  if (error) throw new Error(error.message);
+  if ((data as number) > RATE_LIMIT_PER_MIN) {
+    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`);
+  }
+}
+
+function costFor(model: keyof typeof PRICES, inputTokens: number, outputTokens: number) {
+  const p = PRICES[model];
+  if (!p) return 0;
+  return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
+}
+
+async function logUsage(
+  supabase: any,
+  userId: string,
+  operation: string,
+  model: keyof typeof PRICES,
+  inputTokens: number,
+  outputTokens: number,
+) {
+  try {
+    await supabase.rpc("log_ai_usage", {
+      _user_id: userId,
+      _operation: operation,
+      _model: model,
+      _input_tokens: inputTokens,
+      _output_tokens: outputTokens,
+      _cost_usd: costFor(model, inputTokens, outputTokens),
+    });
+  } catch (e) {
+    // Logging must never break the user flow.
+    console.error("logUsage failed", e);
   }
 }
 
