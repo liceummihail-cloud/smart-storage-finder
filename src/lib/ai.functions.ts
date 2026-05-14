@@ -114,7 +114,7 @@ async function callAI(body: unknown) {
   return res.json();
 }
 
-async function embed(text: string): Promise<number[]> {
+async function embed(text: string): Promise<{ embedding: number[]; tokens: number }> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY is not configured");
   const res = await fetch(`${GATEWAY}/embeddings`, {
@@ -139,7 +139,7 @@ async function embed(text: string): Promise<number[]> {
     throw new Error(`Помилка AI ембедінгу (${res.status})`);
   }
   const json = await res.json();
-  return json.data[0].embedding as number[];
+  return { embedding: json.data[0].embedding as number[], tokens: json.usage?.total_tokens ?? 0 };
 }
 
 /** Cleans raw speech transcript and extracts a list of items. */
