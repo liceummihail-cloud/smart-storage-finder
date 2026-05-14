@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_rate_limit: {
+        Row: {
+          count: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      ai_usage_log: {
+        Row: {
+          cost_usd: number
+          created_at: string
+          id: string
+          input_tokens: number
+          model: string
+          operation: string
+          output_tokens: number
+          user_id: string
+        }
+        Insert: {
+          cost_usd?: number
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model: string
+          operation: string
+          output_tokens?: number
+          user_id: string
+        }
+        Update: {
+          cost_usd?: number
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string
+          operation?: string
+          output_tokens?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       containers: {
         Row: {
           created_at: string
@@ -239,6 +290,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      increment_ai_rate_limit: { Args: { _user_id: string }; Returns: number }
+      log_ai_usage: {
+        Args: {
+          _cost_usd: number
+          _input_tokens: number
+          _model: string
+          _operation: string
+          _output_tokens: number
+          _user_id: string
+        }
+        Returns: undefined
+      }
       match_items: {
         Args: { match_count?: number; query_embedding: string }
         Returns: {
