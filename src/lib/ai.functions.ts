@@ -241,21 +241,31 @@ export const saveItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
+    await checkRateLimit(supabase, userId);
+
     if (data.replace) {
       await supabase.from("items").delete().eq("container_id", data.containerId);
     }
 
+    let totalEmbedTokens = 0;
     const rows = await Promise.all(
-      data.items.map(async (name) => ({
-        container_id: data.containerId,
-        user_id: userId,
-        name,
-        embedding: JSON.stringify(await embed(name)),
-      })),
+      data.items.map(async (name) => {
+        const e = await embed(name);
+        totalEmbedTokens += e.tokens;
+        return {
+          container_id: data.containerId,
+          user_id: userId,
+          name,
+          embedding: JSON.stringify(e.embedding),
+        };
+      }),
     );
 
     const { error } = await supabase.from("items").insert(rows as any);
     if (error) throw new Error(error.message);
+
+    await logUsage(supabase, userId, "embed_save", "google/gemini-embedding-001", totalEmbedTokens, 0);
+
     return { ok: true, count: rows.length };
   });
 
@@ -266,24 +276,30 @@ export const searchItems = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
+    await checkRateLimit(supabase, userId);
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
       .eq("user_id", userId)
       .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
     const counter = await getOrCreateMonthly(supabase, userId);
-    if (profile?.plan === "free" && counter.searches_count >= FREE_LIMITS.searches) {
+    if (counter.searches_count >= limits.searches) {
       throw new LimitError(
-        `Місячний ліміт безкоштовного плану (${FREE_LIMITS.searches} пошуків) вичерпано.`,
+        `Місячний ліміт плану ${planKey} (${limits.searches} пошуків) вичерпано.`,
       );
     }
 
-    const queryEmbedding = await embed(data.query);
+    const e = await embed(data.query);
     const { data: matches, error } = await supabase.rpc("match_items", {
-      query_embedding: queryEmbedding as any,
+      query_embedding: e.embedding as any,
       match_count: 12,
     });
     if (error) throw new Error(error.message);
+
+    await logUsage(supabase, userId, "embed_search", "google/gemini-embedding-001", e.tokens, 0);
 
     await supabase
       .from("usage_counters")
