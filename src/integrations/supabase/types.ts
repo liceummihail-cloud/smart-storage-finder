@@ -154,6 +154,7 @@ export type Database = {
           display_name: string | null
           id: string
           plan: Database["public"]["Enums"]["subscription_plan"]
+          trial_ends_at: string | null
           tutorial_completed: boolean
           updated_at: string
           user_id: string
@@ -163,6 +164,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           plan?: Database["public"]["Enums"]["subscription_plan"]
+          trial_ends_at?: string | null
           tutorial_completed?: boolean
           updated_at?: string
           user_id: string
@@ -172,6 +174,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           plan?: Database["public"]["Enums"]["subscription_plan"]
+          trial_ends_at?: string | null
           tutorial_completed?: boolean
           updated_at?: string
           user_id?: string
@@ -198,6 +201,57 @@ export type Database = {
           id?: string
           name?: string
           photo_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          provider: string
+          provider_customer_id: string | null
+          provider_subscription_id: string
+          raw_event: Json | null
+          status: string
+          trial_end: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          provider: string
+          provider_customer_id?: string | null
+          provider_subscription_id: string
+          raw_event?: Json | null
+          status: string
+          trial_end?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          provider?: string
+          provider_customer_id?: string | null
+          provider_subscription_id?: string
+          raw_event?: Json | null
+          status?: string
+          trial_end?: string | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
