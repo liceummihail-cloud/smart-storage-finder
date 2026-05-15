@@ -1,8 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Sparkles, Check, Crown } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Sparkles, Check, Crown, Gift } from "lucide-react";
 import { NeuButton, NeuCard } from "@/components/neu";
-import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import {
+  getMySubscription,
+  startProTrial,
+  createCheckoutSession,
+} from "@/lib/payments.functions";
 
 export const Route = createFileRoute("/_authenticated/upgrade")({
   component: Upgrade,
@@ -20,7 +26,7 @@ const PLANS: {
   {
     id: "free",
     name: "Free",
-    price: "0 ₴",
+    price: "0 $",
     icon: Check,
     features: [
       "1 кімната",
@@ -33,7 +39,7 @@ const PLANS: {
   {
     id: "pro",
     name: "Pro",
-    price: "79 ₴ / міс",
+    price: "4.99 $ / міс",
     icon: Sparkles,
     features: [
       "До 10 кімнат",
@@ -47,7 +53,7 @@ const PLANS: {
   {
     id: "premium",
     name: "Premium",
-    price: "199 ₴ / міс",
+    price: "9.99 $ / міс",
     icon: Crown,
     features: [
       "Усе з Pro",
@@ -59,35 +65,115 @@ const PLANS: {
   },
 ];
 
+function formatTrialLeft(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "завершився";
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+  return `${days} ${days === 1 ? "день" : days < 5 ? "дні" : "днів"}`;
+}
+
 function Upgrade() {
-  const [current, setCurrent] = useState<Plan>("free");
+  const fetchSub = useServerFn(getMySubscription);
+  const startTrial = useServerFn(startProTrial);
+  const checkout = useServerFn(createCheckoutSession);
+
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState<Plan>("free");
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [trialActive, setTrialActive] = useState(false);
+  const [hasHistory, setHasHistory] = useState(false);
+
+  const refresh = async () => {
+    try {
+      const s = await fetchSub();
+      setPlan(s.plan);
+      setTrialEndsAt(s.trialEndsAt);
+      setTrialActive(s.trialActive);
+      setHasHistory((s.subscriptions?.length ?? 0) > 0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("plan")
-        .eq("user_id", u.user.id)
-        .maybeSingle();
-      if (data?.plan) setCurrent(data.plan as Plan);
-    })();
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const onTrial = async () => {
+    setBusy(true);
+    try {
+      const r = await startTrial();
+      if (r.ok) {
+        toast.success("Pro активовано на 7 днів!");
+        await refresh();
+      } else if (r.reason === "already_used") {
+        toast.error("Тріал вже було використано на цьому акаунті");
+      } else {
+        toast.error("Не вдалося активувати тріал");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUpgrade = async (target: "pro" | "premium") => {
+    setBusy(true);
+    try {
+      const r = await checkout({ data: { plan: target } });
+      if (r.ok) {
+        // window.location.href = r.url -- when Paddle ready
+      } else {
+        toast.message(r.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <main className="px-6 py-8 mx-auto max-w-md">
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <div className="w-20 h-20 mx-auto neu-raised rounded-3xl flex items-center justify-center mb-4">
           <Sparkles className="w-10 h-10 text-primary" />
         </div>
         <h1 className="text-2xl font-bold">План підписки</h1>
-        <p className="text-xs text-muted-foreground mt-1">Поточний: {current.toUpperCase()}</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Поточний: <span className="font-semibold">{plan.toUpperCase()}</span>
+          {trialActive && trialEndsAt && (
+            <> · тріал ще {formatTrialLeft(trialEndsAt)}</>
+          )}
+        </p>
       </div>
+
+      {!loading && !hasHistory && plan === "free" && (
+        <NeuCard className="mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 neu-raised rounded-2xl flex items-center justify-center shrink-0">
+              <Gift className="w-5 h-5 text-accent" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-sm">7 днів Pro безкоштовно</h3>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Без карти. Можна спробувати усі функції Pro і скасувати в будь-який час.
+              </p>
+              <NeuButton
+                variant="primary"
+                className="w-full"
+                onClick={onTrial}
+                disabled={busy}
+              >
+                Активувати тріал
+              </NeuButton>
+            </div>
+          </div>
+        </NeuCard>
+      )}
 
       <div className="space-y-4">
         {PLANS.map((p) => {
-          const isCurrent = p.id === current;
+          const isCurrent = p.id === plan;
           const Icon = p.icon;
           return (
             <NeuCard key={p.id} className="relative overflow-hidden">
@@ -100,10 +186,10 @@ function Upgrade() {
                     <Icon className="w-4 h-4 text-primary" /> {p.name}
                   </h2>
                   {isCurrent ? (
-                    <span className="text-xs neu-pressed px-3 py-1 rounded-full">поточний</span>
-                  ) : (
-                    <span className="text-xs neu-pressed px-3 py-1 rounded-full">скоро</span>
-                  )}
+                    <span className="text-xs neu-pressed px-3 py-1 rounded-full">
+                      {trialActive ? "тріал" : "поточний"}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">{p.price}</p>
                 <ul className="space-y-2 text-sm mb-5">
@@ -114,8 +200,13 @@ function Upgrade() {
                   ))}
                 </ul>
                 {!isCurrent && p.id !== "free" && (
-                  <NeuButton variant="primary" className="w-full" disabled>
-                    Сповістити мене
+                  <NeuButton
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => onUpgrade(p.id as "pro" | "premium")}
+                    disabled={busy}
+                  >
+                    Оформити підписку
                   </NeuButton>
                 )}
               </div>
@@ -125,7 +216,7 @@ function Upgrade() {
       </div>
 
       <p className="text-[10px] text-muted-foreground text-center mt-6">
-        Платежі додамо незабаром. У мобільному додатку — через Google Play Billing.
+        Web — Paddle (з ПДВ). У мобільному додатку — Google Play Billing.
       </p>
     </main>
   );
