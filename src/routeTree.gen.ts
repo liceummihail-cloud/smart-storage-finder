@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedUpgradeRouteImport } from './routes/_authenticated/upgrade'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedRoomsRouteImport } from './routes/_authenticated/rooms'
+import { Route as ApiPublicPaddleWebhookRouteImport } from './routes/api/public/paddle-webhook'
 import { Route as AuthenticatedRoomsRoomIdRouteImport } from './routes/_authenticated/rooms_.$roomId'
 
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -52,6 +53,11 @@ const AuthenticatedRoomsRoute = AuthenticatedRoomsRouteImport.update({
   path: '/rooms',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const ApiPublicPaddleWebhookRoute = ApiPublicPaddleWebhookRouteImport.update({
+  id: '/api/public/paddle-webhook',
+  path: '/api/public/paddle-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRoomsRoomIdRoute =
   AuthenticatedRoomsRoomIdRouteImport.update({
     id: '/rooms_/$roomId',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof AuthenticatedSearchRoute
   '/upgrade': typeof AuthenticatedUpgradeRoute
   '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/search': typeof AuthenticatedSearchRoute
   '/upgrade': typeof AuthenticatedUpgradeRoute
   '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/upgrade': typeof AuthenticatedUpgradeRoute
   '/_authenticated/rooms_/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/upgrade'
     | '/rooms/$roomId'
+    | '/api/public/paddle-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/upgrade'
     | '/rooms/$roomId'
+    | '/api/public/paddle-webhook'
   id:
     | '__root__'
     | '/'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/_authenticated/search'
     | '/_authenticated/upgrade'
     | '/_authenticated/rooms_/$roomId'
+    | '/api/public/paddle-webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,6 +136,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
+  ApiPublicPaddleWebhookRoute: typeof ApiPublicPaddleWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -177,6 +190,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRoomsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/api/public/paddle-webhook': {
+      id: '/api/public/paddle-webhook'
+      path: '/api/public/paddle-webhook'
+      fullPath: '/api/public/paddle-webhook'
+      preLoaderRoute: typeof ApiPublicPaddleWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/rooms_/$roomId': {
       id: '/_authenticated/rooms_/$roomId'
       path: '/rooms/$roomId'
@@ -210,7 +230,18 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
+  ApiPublicPaddleWebhookRoute: ApiPublicPaddleWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
