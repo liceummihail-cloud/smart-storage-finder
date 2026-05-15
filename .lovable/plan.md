@@ -1,88 +1,74 @@
-## Мета
+# Гібридна модель платежів
 
-Захистити проєкт від користувачів-зловмисників, які можуть з'їсти весь AI-бюджет. Зараз Pro = "необмежено" в коді — це ризик. Додаємо 3 рівні захисту без погіршення UX для нормальних користувачів.
+Web-користувачі платять через Paddle, Android-користувачі через Google Play Billing. Обидва канали оновлюють одне поле `profiles.plan` через бекенд.
 
-Важливо: користуємось вбудованими можливостями Lovable. Жорсткого rate-limiting на рівні інфраструктури зараз немає — робимо програмний на рівні БД (підрахунок запитів за хвилину).
-
----
-
-## 1. Ліміти для Pro (hard cap)
-
-Розширити `FREE_LIMITS` у `src/lib/ai.functions.ts` на структуру з лімітами на план:
+## Архітектура
 
 ```text
-free:    100 транскрипцій / 200 пошуків на місяць
-pro:    5000 транскрипцій / 20000 пошуків на місяць
-premium: без ліміту (або 50000/200000 для перестраховки)
+┌─────────────────┐         ┌──────────────────┐
+│  Web (browser)  │────────▶│     Paddle       │
+└─────────────────┘         │  (MoR, VAT inc.) │
+                            └────────┬─────────┘
+                                     │ webhook (verified)
+                                     ▼
+                            ┌──────────────────┐
+                            │ Lovable Cloud DB │
+                            │  profiles.plan   │
+                            │  subscriptions   │
+                            └────────▲─────────┘
+                                     │ webhook (RTDN)
+                            ┌────────┴─────────┐
+                            │ Google Play      │
+                            │ Billing (15%)    │
+                            └────────▲─────────┘
+                                     │
+┌─────────────────┐                  │
+│  Android APK    │──────────────────┘
+│  (Capacitor)    │   in-app purchase
+└─────────────────┘
 ```
 
-У `extractItems` і `searchItems` прибрати спеціальну гілку "тільки free" — перевіряти ліміт для всіх планів за `LIMITS[plan]`. Premium — пропускати перевірку.
+Підписка прив'язана до user_id (а не до пристрою), тому користувач, що оплатив Pro в Android, отримує Pro і на сайті, і навпаки.
 
-Користувач Pro в нормі робить ~50 транскрипцій/міс — у нього 100x запас. Бот вдариться об стіну.
+## Етап 1 — Web через Paddle (робимо зараз)
 
-## 2. М'який rate limit (60 запитів/хв на user)
+1. **Увімкнути Paddle** через Lovable (тестове середовище створиться одразу, для live — верифікація бізнесу).
+2. **Створити продукти в Paddle:**
+   - Pro — 79 ₴/міс (≈ $1.99/міс)
+   - Premium — 199 ₴/міс (≈ $4.99/міс)
+3. **БД-зміни:** таблиця `subscriptions` (provider, provider_subscription_id, status, current_period_end, plan, user_id) — щоб тримати історію і знати, звідки прийшла підписка.
+4. **Checkout** на сторінці `/upgrade` — кнопки "Сповістити мене" замінити на робочі Paddle Checkout кнопки.
+5. **Webhook** `/api/public/paddle-webhook` — перевіряє підпис Paddle, оновлює `profiles.plan` і `subscriptions`. Обробляє: `subscription.created`, `subscription.updated`, `subscription.canceled`, `transaction.completed`.
+6. **Сторінка "Керування підпискою"** — кнопка "Скасувати" / "Змінити план" відкриває Paddle Customer Portal.
 
-Нова таблиця `ai_rate_limit`:
-- `user_id uuid`
-- `window_start timestamptz` (округлено до хвилини)
-- `count int`
-- PK (`user_id`, `window_start`)
+## Етап 2 — Android через Google Play Billing (окремо, після збірки APK)
 
-Перед кожним викликом AI робимо `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count`. Якщо count > 60 — кидаємо `LimitError("Забагато запитів. Зачекай хвилину.")`.
+Це **не можна зробити в Lovable preview** — потрібен реальний APK і Play Console. Кроки на майбутнє:
 
-Старі рядки видаляє pg-функція раз на день (cron не потрібен — просто запит з LIMIT при кожному 100-му виклику).
+1. Capacitor plugin: `cordova-plugin-purchase` (підтримує Android + майбутній iOS).
+2. У Play Console створити In-app products з тими самими ID (`pro_monthly`, `premium_monthly`).
+3. Додати TanStack server route `/api/public/google-play-rtdn` — приймає Real-time Developer Notifications, верифікує покупку через Google Play Developer API (`androidpublisher.purchases.subscriptionsv2.get`), оновлює `profiles.plan` і `subscriptions`.
+4. У застосунку: при відкритті екрана `/upgrade` детектити Capacitor (`Capacitor.isNativePlatform()`) і показувати або Paddle-кнопку, або native Google Play purchase flow.
+5. Service account JSON від Google Cloud → секрет `GOOGLE_PLAY_SERVICE_ACCOUNT`.
 
-## 3. Лог AI-витрат
+## Технічна частина (Етап 1, що робимо зараз)
 
-Нова таблиця `ai_usage_log`:
-- `user_id uuid`
-- `created_at timestamptz default now()`
-- `operation text` ('extract_items' | 'embed_save' | 'embed_search')
-- `model text`
-- `input_tokens int`
-- `output_tokens int`
-- `cost_usd numeric(10,6)` (рахуємо в коді за відомим прайсом)
+**Файли:**
+- `supabase/migrations/...` — таблиця `subscriptions`, оновлення `profiles.plan` через webhook
+- `src/lib/payments.functions.ts` — server fn `createCheckoutSession()`, `getSubscription()`, `openCustomerPortal()`
+- `src/routes/api/public/paddle-webhook.ts` — server route з перевіркою підпису Paddle
+- `src/routes/_authenticated/upgrade.tsx` — робочі кнопки Checkout, статус підписки
+- `src/routes/_authenticated/billing.tsx` — нова сторінка керування підпискою
 
-Записуємо після кожного успішного виклику AI. Це дає:
-- Топ-10 споживачів (`SELECT user_id, sum(cost_usd) FROM ai_usage_log WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 10`)
-- Загальну собівартість на користувача
-- Базу для майбутньої адмінки
+**Гарантія цілісності:**
+- `profiles.plan` змінюється **тільки** через webhook (не з фронтенду) — бо інакше можна підробити.
+- Webhook ідемпотентний: дубльовані події не подвоюють підписки.
+- При закінченні `current_period_end` без `subscription.renewed` — cron-скрипт або lazy-check у server fn опускає план до `free`.
 
-RLS: користувач бачить тільки свої записи; service_role бачить усе.
+## Питання для вас
 
-## 4. Оновити сторінку Upgrade
+1. **Ціни в Paddle:** Paddle працює у валютах USD/EUR/GBP. Конвертуємо 79 ₴ ≈ $1.99 і 199 ₴ ≈ $4.99? Чи інші суми?
+2. **Trial:** даємо 7 днів безкоштовного Pro для нових юзерів?
+3. **Етап 2 (Google Play):** робимо план зараз для довідки, чи відкладаємо до моменту, коли будете готові збирати APK?
 
-У `src/routes/_authenticated/upgrade.tsx` чесно показати ліміти Pro:
-- "До 5000 голосових / міс"
-- "До 20000 пошуків / міс"
-
-Замість поточного "Необмежено голосу і пошуків" — щоб користувач не очікував безмежності.
-
-## Технічні деталі
-
-**Файли, які зміняться:**
-- `src/lib/ai.functions.ts` — нова мапа лімітів, `checkRateLimit()`, `logUsage()`, нові виклики у трьох місцях.
-- `src/routes/_authenticated/upgrade.tsx` — оновлений текст features для Pro.
-- Міграція: 2 нові таблиці (`ai_rate_limit`, `ai_usage_log`) + RLS.
-
-**Підрахунок токенів:**
-- Для chat completions беремо з `ai.usage.prompt_tokens` / `completion_tokens` що повертає gateway.
-- Для embeddings — з `json.usage.total_tokens`.
-
-**Прайс (хардкод у коді):**
-```text
-gemini-2.5-flash:    input  $0.30/M, output $2.50/M
-gemini-embedding-001:           $0.15/M
-```
-
-**Що НЕ робимо у цій ітерації:**
-- Не блокуємо доступ при перевитраті кредитів Lovable (це окрема задача).
-- Не робимо UI адмінки (запит у БД достатньо для ручного моніторингу).
-- Не алертимо в email/Telegram — додамо пізніше за потреби.
-
-## Послідовність виконання
-
-1. Міграція БД (2 таблиці + RLS).
-2. Оновити `src/lib/ai.functions.ts`: ліміти, rate limit, лог.
-3. Оновити `src/routes/_authenticated/upgrade.tsx`: чесні цифри Pro.
-4. Перевірити що Free-користувач все ще впирається у свої 100/200, Pro — у 5000/20000.
+Після відповідей створю міграцію БД і починаю Етап 1.
