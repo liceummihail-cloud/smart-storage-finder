@@ -35,7 +35,7 @@ export const getMySubscription = createServerFn({ method: "GET" })
       !!trialEndsAt && new Date(trialEndsAt).getTime() > Date.now();
 
     return {
-      plan: (profile?.plan ?? "free") as "free" | "pro" | "premium",
+      plan: (profile?.plan ?? "free") as "free" | "pro" | "yearly" | "premium",
       trialEndsAt,
       trialActive,
       subscriptions: subs ?? [],
