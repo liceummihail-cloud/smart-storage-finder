@@ -98,7 +98,7 @@ export const startProTrial = createServerFn({ method: "POST" })
 export const createCheckoutSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) =>
-    z.object({ plan: z.enum(["pro", "premium"]) }).parse(data),
+    z.object({ plan: z.enum(["pro", "yearly"]) }).parse(data),
   )
   .handler(async ({ data, context }) => {
     const token = process.env.PADDLE_API_KEY;
