@@ -34,8 +34,11 @@ const PRICES = {
 
 class LimitError extends Error {
   status = 402;
-  constructor(msg: string) {
+  upgradeRequired = true;
+  scope: "monthly" | "daily" | "rate";
+  constructor(msg: string, scope: "monthly" | "daily" | "rate" = "monthly") {
     super(msg);
+    this.scope = scope;
   }
 }
 
