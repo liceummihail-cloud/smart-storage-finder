@@ -121,7 +121,7 @@ function Upgrade() {
     }
   };
 
-  const onUpgrade = async (target: "pro" | "premium") => {
+  const onUpgrade = async (target: "pro" | "yearly") => {
     setBusy(true);
     try {
       const r = await checkout({ data: { plan: target } });
