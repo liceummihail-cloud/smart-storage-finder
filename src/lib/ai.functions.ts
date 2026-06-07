@@ -382,7 +382,9 @@ export const canCreate = createServerFn({ method: "POST" })
       .select("plan")
       .eq("user_id", userId)
       .single();
-    if (profile?.plan === "pro") return { allowed: true, plan: "pro" as const };
+    if (profile?.plan === "pro" || profile?.plan === "yearly" || profile?.plan === "premium") {
+      return { allowed: true, plan: profile.plan as "pro" | "yearly" | "premium" };
+    }
 
     if (data.kind === "room") {
       const { count } = await supabase
