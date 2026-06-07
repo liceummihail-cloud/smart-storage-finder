@@ -206,7 +206,7 @@ function Upgrade() {
                   <NeuButton
                     variant="primary"
                     className="w-full"
-                    onClick={() => onUpgrade(p.id as "pro" | "premium")}
+                    onClick={() => onUpgrade(p.id as "pro" | "yearly")}
                     disabled={busy}
                   >
                     Оформити підписку
