@@ -256,6 +256,10 @@ export const extractItems = createServerFn({ method: "POST" })
       .from("usage_counters")
       .update({ transcriptions_count: counter.transcriptions_count + 1 })
       .eq("id", counter.id);
+    await supabase
+      .from("usage_counters_daily")
+      .update({ transcriptions_count: daily.transcriptions_count + 1 })
+      .eq("id", daily.id);
 
     return { items };
   });
