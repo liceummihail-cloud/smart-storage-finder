@@ -46,8 +46,26 @@ async function checkRateLimit(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("increment_ai_rate_limit", { _user_id: userId });
   if (error) throw new Error(error.message);
   if ((data as number) > RATE_LIMIT_PER_MIN) {
-    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`);
+    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`, "rate");
   }
+}
+
+async function getOrCreateDaily(supabase: any, userId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("usage_counters_daily")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("day", today)
+    .maybeSingle();
+  if (data) return data;
+  const { data: created, error } = await supabase
+    .from("usage_counters_daily")
+    .insert({ user_id: userId, day: today })
+    .select()
+    .single();
+  if (error) throw error;
+  return created;
 }
 
 function costFor(model: keyof typeof PRICES, inputTokens: number, outputTokens: number) {
