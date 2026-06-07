@@ -46,7 +46,7 @@ function Rooms() {
       return;
     }
     if (atLimit) {
-      toast.error("Досягнуто ліміт 3 кімнат на Freemium");
+      toast.error(`Досягнуто ліміт ${FREE_ROOMS_LIMIT} кімнати на Free плані`);
       navigate({ to: "/upgrade" });
       return;
     }
