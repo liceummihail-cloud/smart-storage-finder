@@ -178,6 +178,43 @@ function Upgrade() {
         </NeuCard>
       )}
 
+      {usage && (
+        <NeuCard className="mb-5">
+          <h3 className="font-semibold text-sm mb-3">Використання цього місяця</h3>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Транскрипцій (день)</span>
+              <span>
+                {usage.daily.transcriptions} / {usage.limits.dailyTranscriptions}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Транскрипцій (місяць)</span>
+              <span>
+                {usage.monthly.transcriptions} / {usage.limits.transcriptions}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">AI пошуків (місяць)</span>
+              <span>
+                {usage.monthly.searches} / {usage.limits.searches}
+              </span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-border">
+              <span className="text-muted-foreground">Витрати на AI</span>
+              <span className={usage.monthlyAiCostUsd > 0.5 ? "text-destructive font-semibold" : ""}>
+                ${usage.monthlyAiCostUsd.toFixed(3)}
+              </span>
+            </div>
+          </div>
+          {usage.monthlyAiCostUsd > 0.5 && (
+            <p className="text-[10px] text-destructive mt-2">
+              ⚠️ Витрати перевищили $0.50/міс — це аномальна активність.
+            </p>
+          )}
+        </NeuCard>
+      )}
+
       <div className="space-y-4">
         {PLANS.map((p) => {
           const isCurrent = p.id === plan;
