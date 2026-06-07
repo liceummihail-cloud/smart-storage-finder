@@ -327,6 +327,14 @@ export const searchItems = createServerFn({ method: "POST" })
     if (counter.searches_count >= limits.searches) {
       throw new LimitError(
         `Місячний ліміт плану ${planKey} (${limits.searches} пошуків) вичерпано.`,
+        "monthly",
+      );
+    }
+    const daily = await getOrCreateDaily(supabase, userId);
+    if (daily.searches_count >= limits.dailySearches) {
+      throw new LimitError(
+        `Денний ліміт плану ${planKey} (${limits.dailySearches} пошуків/день) вичерпано.`,
+        "daily",
       );
     }
 
