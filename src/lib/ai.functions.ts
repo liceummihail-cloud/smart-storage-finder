@@ -5,17 +5,22 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 const FREE_LIMITS = {
-  rooms: 3,
-  containers: 30,
+  rooms: 1,
+  containers: 20,
   transcriptions: 100,
-  searches: 200,
+  searches: 50,
 };
 
-// Monthly AI usage caps per plan. Premium = no monthly cap (still rate-limited).
-const PLAN_LIMITS: Record<string, { transcriptions: number; searches: number }> = {
-  free: { transcriptions: 100, searches: 200 },
-  pro: { transcriptions: 5000, searches: 20000 },
-  premium: { transcriptions: Number.POSITIVE_INFINITY, searches: Number.POSITIVE_INFINITY },
+// Plan caps: monthly + daily transcription limits.
+const PLAN_LIMITS: Record<
+  string,
+  { transcriptions: number; searches: number; dailyTranscriptions: number; dailySearches: number }
+> = {
+  free:    { transcriptions: 100,  searches: 50,   dailyTranscriptions: 10, dailySearches: 25 },
+  pro:     { transcriptions: 1000, searches: 5000, dailyTranscriptions: 50, dailySearches: 1000 },
+  yearly:  { transcriptions: 1500, searches: 7500, dailyTranscriptions: 75, dailySearches: 1500 },
+  // legacy: treat 'premium' as 'yearly' for now
+  premium: { transcriptions: 1500, searches: 7500, dailyTranscriptions: 75, dailySearches: 1500 },
 };
 
 // Per-minute soft rate limit (anti-abuse). Same for all plans.
@@ -29,8 +34,11 @@ const PRICES = {
 
 class LimitError extends Error {
   status = 402;
-  constructor(msg: string) {
+  upgradeRequired = true;
+  scope: "monthly" | "daily" | "rate";
+  constructor(msg: string, scope: "monthly" | "daily" | "rate" = "monthly") {
     super(msg);
+    this.scope = scope;
   }
 }
 
@@ -38,8 +46,26 @@ async function checkRateLimit(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("increment_ai_rate_limit", { _user_id: userId });
   if (error) throw new Error(error.message);
   if ((data as number) > RATE_LIMIT_PER_MIN) {
-    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`);
+    throw new LimitError(`Забагато запитів (${RATE_LIMIT_PER_MIN}/хв). Зачекай хвилинку.`, "rate");
   }
+}
+
+async function getOrCreateDaily(supabase: any, userId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("usage_counters_daily")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("day", today)
+    .maybeSingle();
+  if (data) return data;
+  const { data: created, error } = await supabase
+    .from("usage_counters_daily")
+    .insert({ user_id: userId, day: today })
+    .select()
+    .single();
+  if (error) throw error;
+  return created;
 }
 
 function costFor(model: keyof typeof PRICES, inputTokens: number, outputTokens: number) {
@@ -164,6 +190,14 @@ export const extractItems = createServerFn({ method: "POST" })
     if (counter.transcriptions_count >= limits.transcriptions) {
       throw new LimitError(
         `Місячний ліміт плану ${planKey} (${limits.transcriptions} транскрипцій) вичерпано.`,
+        "monthly",
+      );
+    }
+    const daily = await getOrCreateDaily(supabase, userId);
+    if (daily.transcriptions_count >= limits.dailyTranscriptions) {
+      throw new LimitError(
+        `Денний ліміт плану ${planKey} (${limits.dailyTranscriptions} транскрипцій/день) вичерпано. Спробуй завтра або оноови план.`,
+        "daily",
       );
     }
 
@@ -222,6 +256,10 @@ export const extractItems = createServerFn({ method: "POST" })
       .from("usage_counters")
       .update({ transcriptions_count: counter.transcriptions_count + 1 })
       .eq("id", counter.id);
+    await supabase
+      .from("usage_counters_daily")
+      .update({ transcriptions_count: daily.transcriptions_count + 1 })
+      .eq("id", daily.id);
 
     return { items };
   });
@@ -289,6 +327,14 @@ export const searchItems = createServerFn({ method: "POST" })
     if (counter.searches_count >= limits.searches) {
       throw new LimitError(
         `Місячний ліміт плану ${planKey} (${limits.searches} пошуків) вичерпано.`,
+        "monthly",
+      );
+    }
+    const daily = await getOrCreateDaily(supabase, userId);
+    if (daily.searches_count >= limits.dailySearches) {
+      throw new LimitError(
+        `Денний ліміт плану ${planKey} (${limits.dailySearches} пошуків/день) вичерпано.`,
+        "daily",
       );
     }
 
@@ -305,6 +351,10 @@ export const searchItems = createServerFn({ method: "POST" })
       .from("usage_counters")
       .update({ searches_count: counter.searches_count + 1 })
       .eq("id", counter.id);
+    await supabase
+      .from("usage_counters_daily")
+      .update({ searches_count: daily.searches_count + 1 })
+      .eq("id", daily.id);
 
     return { matches: matches ?? [] };
   });
@@ -332,7 +382,9 @@ export const canCreate = createServerFn({ method: "POST" })
       .select("plan")
       .eq("user_id", userId)
       .single();
-    if (profile?.plan === "pro") return { allowed: true, plan: "pro" as const };
+    if (profile?.plan === "pro" || profile?.plan === "yearly" || profile?.plan === "premium") {
+      return { allowed: true, plan: profile.plan as "pro" | "yearly" | "premium" };
+    }
 
     if (data.kind === "room") {
       const { count } = await supabase
@@ -353,5 +405,35 @@ export const canCreate = createServerFn({ method: "POST" })
       used: count ?? 0,
       limit: FREE_LIMITS.containers,
       plan: "free" as const,
+    };
+  });
+
+/** Returns monthly + daily AI usage with the user's plan limits and AI spend. */
+export const getMyUsage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .eq("user_id", userId)
+      .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
+    const month = await getOrCreateMonthly(supabase, userId);
+    const daily = await getOrCreateDaily(supabase, userId);
+    const { data: cost } = await supabase.rpc("get_monthly_ai_cost", { _user_id: userId });
+    return {
+      plan: planKey,
+      limits,
+      monthly: {
+        transcriptions: month.transcriptions_count,
+        searches: month.searches_count,
+      },
+      daily: {
+        transcriptions: daily.transcriptions_count,
+        searches: daily.searches_count,
+      },
+      monthlyAiCostUsd: Number(cost ?? 0),
     };
   });

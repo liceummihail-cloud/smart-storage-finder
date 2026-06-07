@@ -10,9 +10,9 @@ export const Route = createFileRoute("/_authenticated/rooms")({
   component: Rooms,
 });
 
-const FREE_ROOMS_LIMIT = 3;
+const FREE_ROOMS_LIMIT = 1;
 type Room = { id: string; name: string; photo_url: string | null };
-type Plan = "free" | "pro";
+type Plan = "free" | "pro" | "yearly" | "premium";
 
 function Rooms() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -46,7 +46,7 @@ function Rooms() {
       return;
     }
     if (atLimit) {
-      toast.error("Досягнуто ліміт 3 кімнат на Freemium");
+      toast.error(`Досягнуто ліміт ${FREE_ROOMS_LIMIT} кімнати на Free плані`);
       navigate({ to: "/upgrade" });
       return;
     }

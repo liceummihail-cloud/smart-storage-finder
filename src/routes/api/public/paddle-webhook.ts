@@ -11,16 +11,14 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 //   ts=<unix>;h1=<hmac_sha256_hex>
 // where the signed payload is `<ts>:<raw_body>`.
 
-type Plan = "free" | "pro" | "premium";
+type Plan = "free" | "pro" | "yearly" | "premium";
 
 function planFromPriceId(priceId: string | null | undefined): Plan {
   if (!priceId) return "free";
-  // These map to Paddle Price IDs created later in the dashboard.
-  // Until products are created, env vars stay empty and the webhook
-  // returns 200 without changing data — safe no-op.
   const proIds = (process.env.PADDLE_PRICE_IDS_PRO ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const premiumIds = (process.env.PADDLE_PRICE_IDS_PREMIUM ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (premiumIds.includes(priceId)) return "premium";
+  const yearlyIds = (process.env.PADDLE_PRICE_IDS_YEARLY ?? process.env.PADDLE_PRICE_IDS_PREMIUM ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  if (yearlyIds.includes(priceId)) return "yearly";
   if (proIds.includes(priceId)) return "pro";
   return "free";
 }

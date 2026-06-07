@@ -9,15 +9,16 @@ import {
   startProTrial,
   createCheckoutSession,
 } from "@/lib/payments.functions";
+import { getMyUsage } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/upgrade")({
   component: Upgrade,
 });
 
-type Plan = "free" | "pro" | "premium";
+type Plan = "free" | "pro" | "yearly" | "premium";
 
 const PLANS: {
-  id: Plan;
+  id: "free" | "pro" | "yearly";
   name: string;
   price: string;
   icon: typeof Sparkles;
@@ -29,11 +30,11 @@ const PLANS: {
     price: "0 $",
     icon: Check,
     features: [
-      "1 кімната",
-      "До 30 коробок",
-      "Без поділу на стіни",
-      "100 голосових / міс",
-      "200 пошуків / міс",
+      "1 кімната, 1 стіна",
+      "До 20 коробок на стіну",
+      "До 50 предметів у коробці",
+      "100 транскрипцій / міс (10/день)",
+      "50 AI пошуків / міс",
     ],
   },
   {
@@ -42,24 +43,27 @@ const PLANS: {
     price: "4.99 $ / міс",
     icon: Sparkles,
     features: [
-      "До 10 кімнат",
-      "До 10 стін у кімнаті",
-      "Необмежено коробок",
-      "До 5000 голосових / міс",
-      "До 20000 пошуків / міс",
-      "PIN-код та біометрія",
+      "10 кімнат, 5 стін у кімнаті",
+      "До 50 коробок на стіну",
+      "До 100 предметів у коробці",
+      "1 000 транскрипцій / міс (50/день)",
+      "5 000 AI пошуків / міс",
+      "Експорт CSV/PDF",
+      "Переміщення коробок між стінами",
     ],
   },
   {
-    id: "premium",
-    name: "Premium",
-    price: "9.99 $ / міс",
+    id: "yearly",
+    name: "Yearly",
+    price: "49.99 $ / рік",
     icon: Crown,
     features: [
-      "Усе з Pro",
-      "Без обмежень кімнат і стін",
-      "Шарінг з родиною",
-      "Експорт списків",
+      "15 кімнат, 7 стін у кімнаті",
+      "До 75 коробок на стіну",
+      "До 100 предметів у коробці",
+      "1 500 транскрипцій / міс (75/день)",
+      "7 500 AI пошуків / міс",
+      "Експорт CSV/PDF",
       "Пріоритетна підтримка",
     ],
   },
@@ -76,6 +80,7 @@ function Upgrade() {
   const fetchSub = useServerFn(getMySubscription);
   const startTrial = useServerFn(startProTrial);
   const checkout = useServerFn(createCheckoutSession);
+  const fetchUsage = useServerFn(getMyUsage);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -83,14 +88,16 @@ function Upgrade() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [trialActive, setTrialActive] = useState(false);
   const [hasHistory, setHasHistory] = useState(false);
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof fetchUsage>> | null>(null);
 
   const refresh = async () => {
     try {
-      const s = await fetchSub();
+      const [s, u] = await Promise.all([fetchSub(), fetchUsage()]);
       setPlan(s.plan);
       setTrialEndsAt(s.trialEndsAt);
       setTrialActive(s.trialActive);
       setHasHistory((s.subscriptions?.length ?? 0) > 0);
+      setUsage(u);
     } finally {
       setLoading(false);
     }
@@ -118,7 +125,7 @@ function Upgrade() {
     }
   };
 
-  const onUpgrade = async (target: "pro" | "premium") => {
+  const onUpgrade = async (target: "pro" | "yearly") => {
     setBusy(true);
     try {
       const r = await checkout({ data: { plan: target } });
@@ -171,6 +178,43 @@ function Upgrade() {
         </NeuCard>
       )}
 
+      {usage && (
+        <NeuCard className="mb-5">
+          <h3 className="font-semibold text-sm mb-3">Використання цього місяця</h3>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Транскрипцій (день)</span>
+              <span>
+                {usage.daily.transcriptions} / {usage.limits.dailyTranscriptions}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Транскрипцій (місяць)</span>
+              <span>
+                {usage.monthly.transcriptions} / {usage.limits.transcriptions}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">AI пошуків (місяць)</span>
+              <span>
+                {usage.monthly.searches} / {usage.limits.searches}
+              </span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-border">
+              <span className="text-muted-foreground">Витрати на AI</span>
+              <span className={usage.monthlyAiCostUsd > 0.5 ? "text-destructive font-semibold" : ""}>
+                ${usage.monthlyAiCostUsd.toFixed(3)}
+              </span>
+            </div>
+          </div>
+          {usage.monthlyAiCostUsd > 0.5 && (
+            <p className="text-[10px] text-destructive mt-2">
+              ⚠️ Витрати перевищили $0.50/міс — це аномальна активність.
+            </p>
+          )}
+        </NeuCard>
+      )}
+
       <div className="space-y-4">
         {PLANS.map((p) => {
           const isCurrent = p.id === plan;
@@ -203,7 +247,7 @@ function Upgrade() {
                   <NeuButton
                     variant="primary"
                     className="w-full"
-                    onClick={() => onUpgrade(p.id as "pro" | "premium")}
+                    onClick={() => onUpgrade(p.id as "pro" | "yearly")}
                     disabled={busy}
                   >
                     Оформити підписку

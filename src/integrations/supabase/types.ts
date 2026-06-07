@@ -153,6 +153,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          language: string
           plan: Database["public"]["Enums"]["subscription_plan"]
           trial_ends_at: string | null
           tutorial_completed: boolean
@@ -163,6 +164,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          language?: string
           plan?: Database["public"]["Enums"]["subscription_plan"]
           trial_ends_at?: string | null
           tutorial_completed?: boolean
@@ -173,6 +175,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          language?: string
           plan?: Database["public"]["Enums"]["subscription_plan"]
           trial_ends_at?: string | null
           tutorial_completed?: boolean
@@ -280,6 +283,33 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_counters_daily: {
+        Row: {
+          created_at: string
+          day: string
+          id: string
+          searches_count: number
+          transcriptions_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          id?: string
+          searches_count?: number
+          transcriptions_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          id?: string
+          searches_count?: number
+          transcriptions_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_security: {
         Row: {
           biometric_enabled: boolean
@@ -344,6 +374,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_monthly_ai_cost: { Args: { _user_id: string }; Returns: number }
       increment_ai_rate_limit: { Args: { _user_id: string }; Returns: number }
       log_ai_usage: {
         Args: {
@@ -370,7 +401,7 @@ export type Database = {
       }
     }
     Enums: {
-      subscription_plan: "free" | "pro" | "premium"
+      subscription_plan: "free" | "pro" | "premium" | "yearly"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -498,7 +529,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      subscription_plan: ["free", "pro", "premium"],
+      subscription_plan: ["free", "pro", "premium", "yearly"],
     },
   },
 } as const
