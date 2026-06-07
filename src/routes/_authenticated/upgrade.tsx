@@ -80,6 +80,7 @@ function Upgrade() {
   const fetchSub = useServerFn(getMySubscription);
   const startTrial = useServerFn(startProTrial);
   const checkout = useServerFn(createCheckoutSession);
+  const fetchUsage = useServerFn(getMyUsage);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -87,14 +88,16 @@ function Upgrade() {
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [trialActive, setTrialActive] = useState(false);
   const [hasHistory, setHasHistory] = useState(false);
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof fetchUsage>> | null>(null);
 
   const refresh = async () => {
     try {
-      const s = await fetchSub();
+      const [s, u] = await Promise.all([fetchSub(), fetchUsage()]);
       setPlan(s.plan);
       setTrialEndsAt(s.trialEndsAt);
       setTrialActive(s.trialActive);
       setHasHistory((s.subscriptions?.length ?? 0) > 0);
+      setUsage(u);
     } finally {
       setLoading(false);
     }
