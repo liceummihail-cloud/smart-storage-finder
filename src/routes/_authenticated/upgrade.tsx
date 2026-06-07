@@ -9,6 +9,7 @@ import {
   startProTrial,
   createCheckoutSession,
 } from "@/lib/payments.functions";
+import { getMyUsage } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/upgrade")({
   component: Upgrade,
