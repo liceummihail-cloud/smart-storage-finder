@@ -190,6 +190,14 @@ export const extractItems = createServerFn({ method: "POST" })
     if (counter.transcriptions_count >= limits.transcriptions) {
       throw new LimitError(
         `Місячний ліміт плану ${planKey} (${limits.transcriptions} транскрипцій) вичерпано.`,
+        "monthly",
+      );
+    }
+    const daily = await getOrCreateDaily(supabase, userId);
+    if (daily.transcriptions_count >= limits.dailyTranscriptions) {
+      throw new LimitError(
+        `Денний ліміт плану ${planKey} (${limits.dailyTranscriptions} транскрипцій/день) вичерпано. Спробуй завтра або оноови план.`,
+        "daily",
       );
     }
 
