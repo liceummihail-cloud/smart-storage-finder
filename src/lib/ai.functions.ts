@@ -5,17 +5,22 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 const FREE_LIMITS = {
-  rooms: 3,
-  containers: 30,
+  rooms: 1,
+  containers: 20,
   transcriptions: 100,
-  searches: 200,
+  searches: 50,
 };
 
-// Monthly AI usage caps per plan. Premium = no monthly cap (still rate-limited).
-const PLAN_LIMITS: Record<string, { transcriptions: number; searches: number }> = {
-  free: { transcriptions: 100, searches: 200 },
-  pro: { transcriptions: 5000, searches: 20000 },
-  premium: { transcriptions: Number.POSITIVE_INFINITY, searches: Number.POSITIVE_INFINITY },
+// Plan caps: monthly + daily transcription limits.
+const PLAN_LIMITS: Record<
+  string,
+  { transcriptions: number; searches: number; dailyTranscriptions: number; dailySearches: number }
+> = {
+  free:    { transcriptions: 100,  searches: 50,   dailyTranscriptions: 10, dailySearches: 25 },
+  pro:     { transcriptions: 1000, searches: 5000, dailyTranscriptions: 50, dailySearches: 1000 },
+  yearly:  { transcriptions: 1500, searches: 7500, dailyTranscriptions: 75, dailySearches: 1500 },
+  // legacy: treat 'premium' as 'yearly' for now
+  premium: { transcriptions: 1500, searches: 7500, dailyTranscriptions: 75, dailySearches: 1500 },
 };
 
 // Per-minute soft rate limit (anti-abuse). Same for all plans.
