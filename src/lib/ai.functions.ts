@@ -407,3 +407,33 @@ export const canCreate = createServerFn({ method: "POST" })
       plan: "free" as const,
     };
   });
+
+/** Returns monthly + daily AI usage with the user's plan limits and AI spend. */
+export const getMyUsage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .eq("user_id", userId)
+      .single();
+    const planKey = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] ?? PLAN_LIMITS.free;
+    const month = await getOrCreateMonthly(supabase, userId);
+    const daily = await getOrCreateDaily(supabase, userId);
+    const { data: cost } = await supabase.rpc("get_monthly_ai_cost", { _user_id: userId });
+    return {
+      plan: planKey,
+      limits,
+      monthly: {
+        transcriptions: month.transcriptions_count,
+        searches: month.searches_count,
+      },
+      daily: {
+        transcriptions: daily.transcriptions_count,
+        searches: daily.searches_count,
+      },
+      monthlyAiCostUsd: Number(cost ?? 0),
+    };
+  });
