@@ -18,6 +18,7 @@ import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedRoomsRouteImport } from './routes/_authenticated/rooms'
 import { Route as ApiPublicPaddleWebhookRouteImport } from './routes/api/public/paddle-webhook'
 import { Route as AuthenticatedRoomsRoomIdRouteImport } from './routes/_authenticated/rooms_.$roomId'
+import { Route as AuthenticatedRoomsRoomIdWallsWallIdRouteImport } from './routes/_authenticated/rooms_.$roomId.walls_.$wallId'
 
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
@@ -64,6 +65,12 @@ const AuthenticatedRoomsRoomIdRoute =
     path: '/rooms/$roomId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRoomsRoomIdWallsWallIdRoute =
+  AuthenticatedRoomsRoomIdWallsWallIdRouteImport.update({
+    id: '/walls_/$wallId',
+    path: '/walls/$wallId',
+    getParentRoute: () => AuthenticatedRoomsRoomIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,8 +79,9 @@ export interface FileRoutesByFullPath {
   '/rooms': typeof AuthenticatedRoomsRoute
   '/search': typeof AuthenticatedSearchRoute
   '/upgrade': typeof AuthenticatedUpgradeRoute
-  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRouteWithChildren
   '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
+  '/rooms/$roomId/walls/$wallId': typeof AuthenticatedRoomsRoomIdWallsWallIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,8 +90,9 @@ export interface FileRoutesByTo {
   '/rooms': typeof AuthenticatedRoomsRoute
   '/search': typeof AuthenticatedSearchRoute
   '/upgrade': typeof AuthenticatedUpgradeRoute
-  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRouteWithChildren
   '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
+  '/rooms/$roomId/walls/$wallId': typeof AuthenticatedRoomsRoomIdWallsWallIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,8 +103,9 @@ export interface FileRoutesById {
   '/_authenticated/rooms': typeof AuthenticatedRoomsRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/upgrade': typeof AuthenticatedUpgradeRoute
-  '/_authenticated/rooms_/$roomId': typeof AuthenticatedRoomsRoomIdRoute
+  '/_authenticated/rooms_/$roomId': typeof AuthenticatedRoomsRoomIdRouteWithChildren
   '/api/public/paddle-webhook': typeof ApiPublicPaddleWebhookRoute
+  '/_authenticated/rooms_/$roomId/walls_/$wallId': typeof AuthenticatedRoomsRoomIdWallsWallIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/upgrade'
     | '/rooms/$roomId'
     | '/api/public/paddle-webhook'
+    | '/rooms/$roomId/walls/$wallId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/upgrade'
     | '/rooms/$roomId'
     | '/api/public/paddle-webhook'
+    | '/rooms/$roomId/walls/$wallId'
   id:
     | '__root__'
     | '/'
@@ -129,6 +141,7 @@ export interface FileRouteTypes {
     | '/_authenticated/upgrade'
     | '/_authenticated/rooms_/$roomId'
     | '/api/public/paddle-webhook'
+    | '/_authenticated/rooms_/$roomId/walls_/$wallId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,21 +217,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRoomsRoomIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/rooms_/$roomId/walls_/$wallId': {
+      id: '/_authenticated/rooms_/$roomId/walls_/$wallId'
+      path: '/walls/$wallId'
+      fullPath: '/rooms/$roomId/walls/$wallId'
+      preLoaderRoute: typeof AuthenticatedRoomsRoomIdWallsWallIdRouteImport
+      parentRoute: typeof AuthenticatedRoomsRoomIdRoute
+    }
   }
 }
+
+interface AuthenticatedRoomsRoomIdRouteChildren {
+  AuthenticatedRoomsRoomIdWallsWallIdRoute: typeof AuthenticatedRoomsRoomIdWallsWallIdRoute
+}
+
+const AuthenticatedRoomsRoomIdRouteChildren: AuthenticatedRoomsRoomIdRouteChildren =
+  {
+    AuthenticatedRoomsRoomIdWallsWallIdRoute:
+      AuthenticatedRoomsRoomIdWallsWallIdRoute,
+  }
+
+const AuthenticatedRoomsRoomIdRouteWithChildren =
+  AuthenticatedRoomsRoomIdRoute._addFileChildren(
+    AuthenticatedRoomsRoomIdRouteChildren,
+  )
 
 interface AuthenticatedRouteChildren {
   AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedUpgradeRoute: typeof AuthenticatedUpgradeRoute
-  AuthenticatedRoomsRoomIdRoute: typeof AuthenticatedRoomsRoomIdRoute
+  AuthenticatedRoomsRoomIdRoute: typeof AuthenticatedRoomsRoomIdRouteWithChildren
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRoomsRoute: AuthenticatedRoomsRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedUpgradeRoute: AuthenticatedUpgradeRoute,
-  AuthenticatedRoomsRoomIdRoute: AuthenticatedRoomsRoomIdRoute,
+  AuthenticatedRoomsRoomIdRoute: AuthenticatedRoomsRoomIdRouteWithChildren,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
