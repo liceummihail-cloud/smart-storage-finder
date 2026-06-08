@@ -96,9 +96,12 @@ function RoomDetail() {
       const path = `${u.user.id}/walls/${crypto.randomUUID()}-${file.name.replace(/[^a-z0-9.]/gi, "_")}`;
       const up = await supabase.storage.from("room-photos").upload(path, file);
       if (up.error) throw up.error;
-      const { data: signed } = await supabase.storage
+      const { data: signed, error: signErr } = await supabase.storage
         .from("room-photos")
         .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signErr || !signed?.signedUrl) {
+        throw signErr ?? new Error("Не вдалося отримати посилання на фото");
+      }
       const { data: created, error } = await supabase
         .from("walls")
         .insert({
@@ -106,7 +109,7 @@ function RoomDetail() {
           user_id: u.user.id,
           name: name.trim(),
           position: walls.length,
-          photo_url: signed?.signedUrl ?? null,
+          photo_url: signed.signedUrl,
         })
         .select()
         .single();
@@ -121,6 +124,10 @@ function RoomDetail() {
       setName("");
       setFile(null);
       setCreating(false);
+      // Optimistically add wall to local list so it appears immediately
+      setWalls((prev) => [...prev, created as any]);
+      await load();
+      toast.success("Стіну створено");
       navigate({
         to: "/rooms/$roomId/walls/$wallId",
         params: { roomId, wallId: created.id },
